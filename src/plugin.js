@@ -42,47 +42,51 @@ module.exports = function (options) {
         return callback(err);
       }
 
-      // Generate PKCS7 ASN.1
-      const p7 = forge.pkcs7.createSignedData();
-      p7.content = forge.util.createBuffer(buf.toString('binary'));
-      p7.addCertificate(options.cert);
-      (options.chain || []).forEach(cert => {
-        p7.addCertificate(cert);
-      });
-      p7.addSigner({
-        key: options.key,
-        certificate: options.cert,
-        digestAlgorithm: forge.pki.oids.sha256,
-        authenticatedAttributes: [
-          {
-            type: forge.pki.oids.contentType,
-            value: forge.pki.oids.data,
-          },
-          {
-            type: forge.pki.oids.messageDigest,
-          },
-          {
-            type: forge.pki.oids.signingTime,
-          },
-        ],
-      });
-      p7.sign();
-      const asn1 = p7.toAsn1();
-
-      // Scrub encapContentInfo.eContent
-      asn1.value[1].value[0].value[2].value.splice(1, 1);
-
-      // Write PKCS7 ASN.1 as DER to buffer
-      const der = forge.asn1.toDer(asn1);
-      const derBuffer = Buffer.from(der.getBytes(), 'binary');
-
-      // Append signature node
-      const signatureNode = rootNode.createChild('application/pkcs7-signature', { filename: 'smime.p7s' });
-      signatureNode.setContent(derBuffer);
-
-      // Switch in and return new root node
-      mail.message = rootNode;
-      callback();
+      try {
+        // Generate PKCS7 ASN.1
+        const p7 = forge.pkcs7.createSignedData();
+        p7.content = forge.util.createBuffer(buf.toString('binary'));
+        p7.addCertificate(options.cert);
+        (options.chain || []).forEach(cert => {
+          p7.addCertificate(cert);
+        });
+        p7.addSigner({
+          key: options.key,
+          certificate: options.cert,
+          digestAlgorithm: forge.pki.oids.sha256,
+          authenticatedAttributes: [
+            {
+              type: forge.pki.oids.contentType,
+              value: forge.pki.oids.data,
+            },
+            {
+              type: forge.pki.oids.messageDigest,
+            },
+            {
+              type: forge.pki.oids.signingTime,
+            },
+          ],
+        });
+        p7.sign();
+        const asn1 = p7.toAsn1();
+  
+        // Scrub encapContentInfo.eContent
+        asn1.value[1].value[0].value[2].value.splice(1, 1);
+  
+        // Write PKCS7 ASN.1 as DER to buffer
+        const der = forge.asn1.toDer(asn1);
+        const derBuffer = Buffer.from(der.getBytes(), 'binary');
+  
+        // Append signature node
+        const signatureNode = rootNode.createChild('application/pkcs7-signature', { filename: 'smime.p7s' });
+        signatureNode.setContent(derBuffer);
+  
+        // Switch in and return new root node
+        mail.message = rootNode;
+        callback();
+      } catch(e) {
+        callback(e);
+      }
     });
   };
 };
